@@ -1,0 +1,134 @@
+library(data.table)
+library(dplyr)
+library(tidyverse)
+hf<-hflights::hflights
+View(hf)
+
+##datatable
+
+summary(hf)
+hfd<-data.table(hf)
+hfd[,.N,by=UniqueCarrier]
+hfd[Cancelled==1,.(count =.N),by=.(UniqueCarrier,FlightNum)]
+hfd[Cancelled==1,.(count=.N),by=Month]
+hfd[Cancelled==1,.(count=.N),by=.(Month,DayOfWeek==6)]
+hfd[,mean(ArrDelay,na.rm = T)]
+
+hfd[,.(mean(ArrDelay,na.rm = T),mean(DepDelay,na.rm = T)),by=.(Origin,Dest,Month)]
+
+hfd[,.(count=.N),keyby=.(Origin,Dest,Month)][by=.(Month==9)]
+
+hfd[Cancelled==0,.(count=.N),by=.(UniqueCarrier,Month)][
+  UniqueCarrier=="XE"|UniqueCarrier=="CO",.(c=.N)][
+    by=UniqueCarrier]
+hfd[Cancelled==0,.(count=.N),by=UniqueCarrier][UniqueCarrier=="XE"]
+
+
+uc<-hfd[Cancelled==1,.(canc=.N),by=.(UniqueCarrier)]#[UniqueCarrier=="AA"]
+unc<-hfd[Cancelled==0,.(ncanc=.N),by=.(UniqueCarrier)]#[UniqueCarrier=="AA"]
+
+
+a<-a[,ratio:=(canc/(canc+ncanc))*100,by=UniqueCarrier][order(ratio)]
+
+View(a)
+View(uc)
+View(unc)
+
+#Unique carrier for each destination
+
+View(hf)
+
+uni<-hf %>% group_by(Origin,Dest,UniqueCarrier) %>% 
+            summarise (unique_flights=n_distinct(TailNum))
+
+View(uni)
+
+#Best player
+
+ncanc<-hfd[Cancelled==0,(count:= .N),keyby=.(UniqueCarrier,Origin,Dest)][order(-count)]
+
+canc<-hfd[Cancelled==1,(ncount:= .N),by=.(UniqueCarrier,Origin,Dest)][order(-ncount)]
+
+rr<-hfd[,rat:=count/(count+ncount)]
+
+m<-merge(ncan,canc,rr,all = TRUE)
+View(m)
+
+#spread and gather
+library(tidyr)
+library(dplyr)
+ht.dt<-data.table::data.table(hf)
+
+c<-ht.dt[,c(.N),by=.(Origin,Dest)][order(-N)]
+head(c)
+d<-   ht.dt[,.N,by=.(Origin,Dest,UniqueCarrier)]%>% spread(UniqueCarrier,N) 
+Total= rowSums(d[,3:ncol(d)],na.rm=T)
+d[,Total:=Total]
+head(d)
+head(c)
+
+
+t<-left_join(c,d,by=c("Origin","Dest"))
+t
+
+for(i in 1:ncol(t))
+{
+  t[which(is.na(t[,i])==T),i]<- 0
+}
+t[order(-N)]
+View(t)
+View(test.dt[,.N,by=.(Origin,Dest)] %>% spread(Dest,N)) 
+sp<-hf %>% group_by(Origin,Dest) %>% summarise(count=n()) %>% 
+  spread(Dest,count)
+
+View(sp)
+
+#Percentage of cancellation of each carrier for every month
+
+muc<-hfd[Cancelled==1,.(canc=.N),keyby=.(UniqueCarrier,Month)]#[order(Month)]
+munc<-hfd[Cancelled==0,.(ncanc=.N),keyby=.(UniqueCarrier,Month)]#[order(Month)]
+View(muc)
+View(munc)
+aa<-merge(muc,munc,all=TRUE)
+View(aa)
+aa<-muc[munc]
+aa<-aa[,ratio:=(canc/(canc+ncanc))*100,by=UniqueCarrier]#[order(ratio)]
+
+View(aa)
+
+#fastest carrier between origin and destination
+
+fas<-hfd[,.(can=.N),by=.(UniqueCarrier,FlightNum,Origin,Dest,Distance,AirTime,ArrDelay,DepDelay)]
+View(fas)
+          new<-select(hfd,UniqueCarrier:FlightNum,Origin,Dest,Distance,AirTime,ArrDelay,DepDelay)
+          
+          #new<-new[,totaltime:=AirTime]
+          View(new)
+          new<-new[,speed:=Distance/AirTime]
+View(new)
+ab<-new[,by=.(UniqueCarrier,FlightNum,Origin,Dest,Distance,AirTime,ArrDelay,DepDelay,totaltime,speed)][
+  Origin=="IAH"][Dest=="DFW"][order(speed)]
+
+View(ab)
+
+
+#find which day of week is most delayed
+
+del<-hfd[,.(count=.N),by=.(DayOfWeek,ArrDelay,DepDelay)]
+del<-del[,totaldelay:=ArrDelay]
+
+
+de<-select(del,DayOfWeek,totaldelay)
+
+de<-de[,.(mean(totaldelay, na.rm = TRUE)),by=DayOfWeek]#[,.averagedelay:=count/totaldelay]
+View(de)
+#depdelay
+del<-hfd[,.(count=.N),by=.(DayOfWeek,ArrDelay,DepDelay)]
+del<-del[,totaldelay:=DepDelay]
+
+
+
+d<-select(del,DayOfWeek,totaldelay)
+
+d<-d[,.(mean(totaldelay, na.rm = TRUE)),by=DayOfWeek]#[,.averagedelay:=count/totaldelay]
+View(d)
